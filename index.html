@@ -126,6 +126,7 @@
             </svg>Anotar fecha</button>
         </div>
       </div>
+      <div class="fils mfil" role="group" aria-label="Filtrar por tipo"><button class="fil" data-f="all" aria-pressed="true"><i class="dot all"></i>Todo<em class="cn">0</em></button><button class="fil" data-f="parcial" aria-pressed="false"><i class="dot parcial"></i>Parciales<em class="cn">0</em></button><button class="fil" data-f="final" aria-pressed="false"><i class="dot final"></i>Finales<em class="cn">0</em></button><button class="fil" data-f="tp" aria-pressed="false"><i class="dot tp"></i>TPs<em class="cn">0</em></button></div>
       <div class="cards">
         <section class="card hero" id="hero" aria-live="polite"></section>
         <section class="card avance">
@@ -138,6 +139,7 @@
       <div class="cal">
         <div class="grid" id="grid"></div>
       </div>
+      <section class="daypanel" id="daypanel" aria-live="polite"></section>
       <div class="tabs">
         <button class="tab" data-m="mes" aria-pressed="true">Este mes</button>
         <button class="tab" data-m="prox" aria-pressed="false">Próximas</button>
@@ -217,6 +219,9 @@
       const d = el('div', 'dm'); d.innerHTML = '<svg viewBox="0 0 ' + w + ' 7" fill="currentColor" aria-hidden="true">' + c + '</svg>'; d.setAttribute('role', 'img'); d.setAttribute('aria-label', s + (s === '1' ? ' día' : ' días')); return d
     }
     let view = new Date(); view.setDate(1);
+    let sel = iso(new Date());
+    const mob = () => matchMedia('(max-width:640px)').matches;
+    const tapDay = k => { if (mob()) { sel = k; render() } else openModal(null, k) };
     let editing = null, filter = 'all', modo = 'mes', armed = false;
 
     function render() {
@@ -251,10 +256,10 @@
       const total = Math.ceil((off + new Date(y, m + 1, 0).getDate()) / 7) * 7, hoy = iso(new Date());
       for (let i = 0; i < total; i++) {
         const d = new Date(y, m, 1 - off + i), k = iso(d);
-        const c = el('div', 'cell' + (d.getMonth() !== m ? ' out' : '') + (k === hoy ? ' today' : ''));
+        const c = el('div', 'cell' + (d.getMonth() !== m ? ' out' : '') + (k === hoy ? ' today' : '') + (k === sel ? ' sel' : ''));
         const num = el('button', 'num', d.getDate());
         num.setAttribute('aria-label', 'Anotar fecha el ' + d.getDate() + ' de ' + MESES[d.getMonth()]);
-        num.onclick = () => openModal(null, k);
+        num.onclick = () => tapDay(k);
         c.appendChild(num);
         const ev = all.filter(e => e.date === k).sort(ord);
         ev.forEach(e => {
@@ -264,9 +269,21 @@
           c.appendChild(b);
         });
         if (ev.length) { const dots = el('div', 'dots'); ev.forEach(e => dots.appendChild(el('span', 'dot ' + e.type))); c.appendChild(dots) }
-        c.onclick = x => { if (x.target === c) openModal(null, k) };
+        c.onclick = x => { if (x.target === c) tapDay(k) };
         g.appendChild(c);
       }
+
+      const dp = $('daypanel'), evs = all.filter(e => e.date === sel).sort(ord);
+      const dph = el('div', 'dph'), add = el('button', 'btn primary', 'Anotar acá');
+      add.onclick = () => openModal(null, sel);
+      dph.append(el('b', null, parse(sel).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })), add);
+      dp.replaceChildren(dph);
+      if (!evs.length) dp.appendChild(el('div', 'empty', 'Sin fechas este día.'));
+      evs.forEach(e => {
+        const b = el('button', 'dprow ' + e.type + (e.hecho ? ' done' : ''));
+        b.append(el('span', 'tag ' + e.type, cap(e.type)), el('b', null, e.materia), el('small', null, [e.hora && e.hora + ' h', e.nota].filter(Boolean).join(', ') || (e.hecho ? 'Hecho' : cuando(diff(e.date)))));
+        b.onclick = () => openModal(e); dp.appendChild(b);
+      });
 
       const l = $('lista'); l.textContent = '';
       const rows = modo === 'mes' ? mes : all.filter(pend).sort(ord);
@@ -315,7 +332,7 @@
       if (editing) Object.assign(editing, data);
       else events.push(Object.assign({ id: Date.now() + '' + Math.floor(Math.random() * 1e4) }, data));
       save(); close();
-      const d = parse(fecha); view = new Date(d.getFullYear(), d.getMonth(), 1); render();
+      const d = parse(fecha); view = new Date(d.getFullYear(), d.getMonth(), 1); sel = fecha; render();
     };
     $('del').onclick = () => {
       if (!armed) { armed = true; $('del').textContent = '¿Seguro? Tocá de nuevo'; return }
@@ -345,7 +362,7 @@
 
     $$('.fil').forEach(b => b.onclick = () => { filter = b.dataset.f; $$('.fil').forEach(x => x.setAttribute('aria-pressed', String(x === b))); render() });
     $$('.tab').forEach(b => b.onclick = () => { modo = b.dataset.m; $$('.tab').forEach(x => x.setAttribute('aria-pressed', String(x === b))); render() });
-    const goto = (y, m) => { view = new Date(y, m, 1); render() };
+    const goto = (y, m) => { view = new Date(y, m, 1); const t = new Date(); sel = iso(t.getFullYear() === view.getFullYear() && t.getMonth() === view.getMonth() ? t : view); render() };
     $('prev').onclick = () => goto(view.getFullYear(), view.getMonth() - 1);
     $('next').onclick = () => goto(view.getFullYear(), view.getMonth() + 1);
     $('hoy').onclick = () => { const t = new Date(); goto(t.getFullYear(), t.getMonth()) };
