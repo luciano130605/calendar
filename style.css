@@ -523,6 +523,35 @@ h1 {
     font-weight: 500
 }
 
+.cell.holiday .num {
+    text-decoration: line-through;
+    text-decoration-color: #e16565;
+    text-decoration-thickness: 2px;
+}
+
+.holiday-label {
+    color: #d96767;
+    font-size: 12px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.holiday-source {
+    padding: 8px;
+    color: var(--muted);
+    font: 400 11px var(--mono);
+}
+
+.holiday-source a { color: inherit }
+.holiday-tag { color: #d96767; font: 500 12px var(--mono) }
+.holiday-row { cursor: default }
+
+@media (max-width: 640px) {
+    .holiday-label { display: none }
+}
+
 .chip {
     display: flex;
     align-items: center;

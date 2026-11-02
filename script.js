@@ -3,6 +3,29 @@ const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', '
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const TIPOS = { parcial: 'Parcial', final: 'Final', tp: 'TP' };
 let events = [];
+const feriados = new Map(), consultasFeriados = new Set();
+function cargarFeriados(year) {
+    if (consultasFeriados.has(year)) return;
+    consultasFeriados.add(year);
+    const key = 'calendario-feriados-' + year;
+    try {
+        const cache = JSON.parse(localStorage.getItem(key));
+        if (cache && Array.isArray(cache.data)) {
+            feriados.set(year, cache.data);
+            if (Date.now() - cache.time < 3 * 60 * 60 * 1000) return;
+        }
+    } catch (e) { }
+    fetch('https://api.argentinadatos.com/v1/feriados/' + year)
+        .then(r => { if (!r.ok) throw new Error('No se pudieron cargar los feriados'); return r.json() })
+        .then(data => {
+            if (!Array.isArray(data)) throw new Error('Respuesta inválida');
+            const validos = data.filter(f => f && typeof f.nombre === 'string' && typeof f.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(f.fecha) && f.fecha.startsWith(year + '-'));
+            feriados.set(year, validos);
+            try { localStorage.setItem(key, JSON.stringify({ time: Date.now(), data: validos })) } catch (e) { }
+            render();
+        }).catch(() => { consultasFeriados.delete(year) });
+}
+const feriadosDelDia = date => (feriados.get(Number(date.slice(0, 4))) || []).filter(f => f.fecha === date);
 try { events = JSON.parse(localStorage.getItem(KEY) || '[]'); if (!Array.isArray(events)) events = [] } catch (e) { events = [] }
 events = events.filter(e => e && typeof e.date === 'string' && e.materia);
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(events)) } catch (e) { } };
@@ -58,13 +81,17 @@ function render() {
     DIAS.forEach(d => g.appendChild(el('div', 'dow', d)));
     const off = (new Date(y, m, 1).getDay() + 6) % 7;
     const total = Math.ceil((off + new Date(y, m + 1, 0).getDate()) / 7) * 7, hoy = iso(new Date());
+    cargarFeriados(new Date(y, m, 1 - off).getFullYear());
+    cargarFeriados(new Date(y, m, total - off).getFullYear());
     for (let i = 0; i < total; i++) {
         const d = new Date(y, m, 1 - off + i), k = iso(d);
-        const c = el('div', 'cell' + (d.getMonth() !== m ? ' out' : '') + (k === hoy ? ' today' : '') + (k === sel ? ' sel' : ''));
+        const festivos = feriadosDelDia(k);
+        const c = el('div', 'cell' + (d.getMonth() !== m ? ' out' : '') + (k === hoy ? ' today' : '') + (k === sel ? ' sel' : '') + (festivos.length ? ' holiday' : ''));
         const num = el('button', 'num', d.getDate());
-        num.setAttribute('aria-label', 'Anotar fecha el ' + d.getDate() + ' de ' + MESES[d.getMonth()]);
+        num.setAttribute('aria-label', d.getDate() + ' de ' + MESES[d.getMonth()] + (festivos.length ? ', feriado: ' + festivos.map(f => f.nombre).join(', ') : '') + '. Anotar fecha');
         num.onclick = () => tapDay(k);
         c.appendChild(num);
+        festivos.forEach(f => { const label = el('div', 'holiday-label', f.nombre); label.title = 'Feriado: ' + f.nombre; c.appendChild(label) });
         const ev = all.filter(e => e.date === k).sort(ord);
         ev.forEach(e => {
             const b = el('button', 'chip ' + e.type + (e.hecho ? ' done' : ''), (e.hecho ? '✓ ' : '') + cap(e.type) + ': ' + e.materia);
@@ -82,7 +109,13 @@ function render() {
     add.onclick = () => openModal(null, sel);
     dph.append(el('b', null, parse(sel).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })), add);
     dp.replaceChildren(dph);
-    if (!evs.length) dp.appendChild(el('div', 'empty', 'Sin fechas este día.'));
+    const festivosSel = feriadosDelDia(sel);
+    festivosSel.forEach(f => {
+        const row = el('div', 'dprow holiday-row');
+        row.append(el('span', 'holiday-tag', 'Feriado'), el('b', null, f.nombre));
+        dp.appendChild(row);
+    });
+    if (!evs.length && !festivosSel.length) dp.appendChild(el('div', 'empty', 'Sin fechas este día.'));
     evs.forEach(e => {
         const b = el('button', 'dprow ' + e.type + (e.hecho ? ' done' : ''));
         b.append(el('span', 'tag ' + e.type, cap(e.type)), el('b', null, e.materia), el('small', null, [e.hora && e.hora + ' h', e.nota].filter(Boolean).join(', ') || (e.hecho ? 'Hecho' : cuando(diff(e.date)))));
