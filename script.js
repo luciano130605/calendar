@@ -52,6 +52,15 @@ let sel = iso(new Date());
 const mob = () => matchMedia('(max-width:640px)').matches;
 const tapDay = k => { if (mob()) { sel = k; render() } else openModal(null, k) };
 let editing = null, filter = 'all', modo = 'mes', armed = false;
+let scrollBeforeModal = 0;
+function showOverlay(id) {
+    if (!document.body.classList.contains('modal-open')) {
+        scrollBeforeModal = window.scrollY;
+        document.body.style.top = -scrollBeforeModal + 'px';
+        document.body.classList.add('modal-open');
+    }
+    $(id).classList.add('open');
+}
 
 function render() {
     const y = view.getFullYear(), m = view.getMonth();
@@ -172,7 +181,7 @@ function openPreview(e) {
     $('preview-grade').hidden = true; $('preview-calif').value = e.calif || '';
     $('preview-delete').textContent = 'Eliminar';
     $('preview-done').textContent = e.hecho ? 'Editar nota' : (e.type === 'tp' ? 'Ya entregué' : 'Ya rendí');
-    $('preview').classList.add('open'); $('preview-edit').focus();
+    showOverlay('preview'); $('preview-edit').focus();
 }
 $('preview-edit').onclick = () => { $('preview').classList.remove('open'); openModal(editing) };
 $('preview-done').onclick = () => { $('preview-grade').hidden = false; $('preview-calif').focus() };
@@ -196,10 +205,17 @@ function openModal(e, date) {
     $('calif').value = e && e.calif || '';
     $('califw').hidden = !$('hecho').checked;
     $('del').hidden = !e; $('del').textContent = 'Eliminar';
-    $('ov').classList.add('open');
+    showOverlay('ov');
     setTimeout(() => $('materia').focus(), 0);
 }
-const close = () => $$('.overlay').forEach(o => o.classList.remove('open'));
+const close = () => {
+    $$('.overlay').forEach(o => o.classList.remove('open'));
+    if (document.body.classList.contains('modal-open')) {
+        document.body.classList.remove('modal-open');
+        document.body.style.top = '';
+        window.scrollTo(0, scrollBeforeModal);
+    }
+};
 $('hecho').onchange = () => { $('califw').hidden = !$('hecho').checked };
 $('save').onclick = () => {
     const materia = $('materia').value.trim(), fecha = $('fecha').value;
@@ -218,7 +234,7 @@ $('del').onclick = () => {
 $('cancel').onclick = close; $('bkclose').onclick = close;
 $$('.overlay').forEach(o => o.onclick = e => { if (e.target === o) close() });
 
-$('resp').onclick = () => { $('bk').value = JSON.stringify(events); $('bkmsg').textContent = ''; $('ov2').classList.add('open') };
+$('resp').onclick = () => { $('bk').value = JSON.stringify(events); $('bkmsg').textContent = ''; showOverlay('ov2') };
 $('bkcopy').onclick = async () => {
     $('bk').select();
     try { await navigator.clipboard.writeText($('bk').value); $('bkmsg').textContent = 'Copiado.' }

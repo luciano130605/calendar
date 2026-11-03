@@ -1544,3 +1544,13 @@ button {
 .preview-details, .preview-status { color: var(--muted); line-height: 1.5; }
 .preview-note { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 12px; line-height: 1.5; }
 #preview-grade .btn { margin-top: 10px; }
+
+body.modal-open {
+    position: fixed;
+    width: 100%;
+    overflow: hidden;
+}
+
+.modal {
+    overscroll-behavior: contain;
+}
