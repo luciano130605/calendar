@@ -169,8 +169,9 @@
         <div><label for="fecha">Fecha</label><input type="date" id="fecha"></div>
         <div><label for="hora">Hora (opcional)</label><input type="time" id="hora"></div>
       </div>
-      <label for="nota">Nota (opcional)</label>
-      <input type="text" id="nota" maxlength="80" placeholder="Aula, temas, si es grupal…">
+      <label>Notas (opcional)</label>
+      <div id="notas"></div>
+      <button type="button" class="btn add-note" id="addnota">+ Agregar nota</button>
       <label class="ck2"><input type="checkbox" id="hecho">Ya lo rendí o entregué</label>
       <div id="califw" hidden><label for="calif">Nota obtenida</label><input type="text" id="calif" maxlength="5"
           inputmode="decimal" placeholder="Ej: 8"></div>
@@ -179,6 +180,24 @@
         <span class="sp"></span>
         <button class="btn" id="cancel">Cancelar</button>
         <button class="btn primary" id="save">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="preview">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+      <div id="preview-content"></div>
+      <div id="preview-grade" hidden>
+        <label for="preview-calif">Nota obtenida (opcional)</label>
+        <input type="text" id="preview-calif" maxlength="5" inputmode="decimal" placeholder="Ej: 8">
+        <button class="btn primary" id="preview-save-grade">Guardar</button>
+      </div>
+      <div class="actions">
+        <button class="btn danger" id="preview-delete">Eliminar</button>
+        <span class="sp"></span>
+        <button class="btn" id="preview-edit">Editar</button>
+        <button class="btn primary" id="preview-done">Ya rendí</button>
+        <button class="btn" id="preview-close">Cerrar</button>
       </div>
     </div>
   </div>

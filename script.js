@@ -39,6 +39,8 @@ function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.c
 const diff = s => Math.round((parse(s) - parse(iso(new Date()))) / 864e5);
 const cuando = n => n === 0 ? 'Hoy' : n === 1 ? 'Mañana' : n > 1 ? 'En ' + n + ' días' : n === -1 ? 'Ayer' : 'Hace ' + (-n) + ' días';
 const ord = (a, b) => (a.date + (a.hora || '99')).localeCompare(b.date + (b.hora || '99'));
+const notasDe = e => Array.isArray(e.notas) ? e.notas : (e.nota ? [e.nota] : []);
+const textoNotas = e => notasDe(e).join(' · ');
 const pend = e => !e.hecho && diff(e.date) >= 0;
 const F = { 0: '01110100011001110101110011000101110', 1: '00100011000010000100001000010001110', 2: '01110100010000100010001000100011111', 3: '11110000010000101110000010000111110', 4: '00010001100101010010111110001000010', 5: '11111100001111000001000011000101110', 6: '00110010001000011110100011000101110', 7: '11111000010001000100010000100001000', 8: '01110100011000101110100011000101110', 9: '01110100011000101111000010001001100' };
 function dm(s) {
@@ -95,8 +97,8 @@ function render() {
         const ev = all.filter(e => e.date === k).sort(ord);
         ev.forEach(e => {
             const b = el('button', 'chip ' + e.type + (e.hecho ? ' done' : ''), (e.hecho ? '✓ ' : '') + cap(e.type) + ': ' + e.materia);
-            b.title = e.materia + (e.hora ? ', ' + e.hora + ' h' : '') + (e.nota ? ' - ' + e.nota : '');
-            b.onclick = x => { x.stopPropagation(); openModal(e) };
+            b.title = e.materia + (e.hora ? ', ' + e.hora + ' h' : '') + (textoNotas(e) ? ' - ' + textoNotas(e) : '');
+            b.onclick = x => { x.stopPropagation(); openPreview(e) };
             c.appendChild(b);
         });
         if (ev.length) { const dots = el('div', 'dots'); ev.forEach(e => dots.appendChild(el('span', 'dot ' + e.type))); c.appendChild(dots) }
@@ -118,8 +120,8 @@ function render() {
     if (!evs.length && !festivosSel.length) dp.appendChild(el('div', 'empty', 'Sin fechas este día.'));
     evs.forEach(e => {
         const b = el('button', 'dprow ' + e.type + (e.hecho ? ' done' : ''));
-        b.append(el('span', 'tag ' + e.type, cap(e.type)), el('b', null, e.materia), el('small', null, [e.hora && e.hora + ' h', e.nota].filter(Boolean).join(', ') || (e.hecho ? 'Hecho' : cuando(diff(e.date)))));
-        b.onclick = () => openModal(e); dp.appendChild(b);
+        b.append(el('span', 'tag ' + e.type, cap(e.type)), el('b', null, e.materia), el('small', null, [e.hora && e.hora + ' h', textoNotas(e)].filter(Boolean).join(', ') || (e.hecho ? 'Hecho' : cuando(diff(e.date)))));
+        b.onclick = () => openPreview(e); dp.appendChild(b);
     });
 
     const l = $('lista'); l.textContent = '';
@@ -136,13 +138,50 @@ function render() {
         const dd = el('div', 'd', String(d.getDate()));
         dd.appendChild(el('span', null, DIAS[(d.getDay() + 6) % 7] + (modo === 'mes' ? '' : ' ' + d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', ''))));
         const mm = el('div', 'm'); mm.appendChild(el('b', null, e.materia));
-        mm.appendChild(el('span', null, [cuando(n), e.hora && e.hora + ' h', e.calif && 'Nota ' + e.calif, e.nota].filter(Boolean).join(', ')));
+        mm.appendChild(el('span', null, [cuando(n), e.hora && e.hora + ' h', e.calif && 'Nota ' + e.calif, textoNotas(e)].filter(Boolean).join(', ')));
         mn.append(dd, mm, el('span', 'tag ' + e.type, cap(e.type)));
-        mn.onclick = () => openModal(e);
+        mn.onclick = () => openPreview(e);
         r.append(ck, mn); l.appendChild(r);
     });
     $('mats').replaceChildren(...[...new Set(events.map(e => e.materia))].sort().map(v => { const o = el('option'); o.value = v; return o }));
 }
+
+function agregarNota(value = '') {
+    const wrap = el('div', 'note-field'), area = el('textarea'), footer = el('div', 'note-footer');
+    area.maxLength = 500; area.value = value; area.placeholder = 'Aula, temas, si es grupal…';
+    area.setAttribute('aria-label', 'Nota');
+    const count = el('span'), remove = el('button', 'note-remove', 'Quitar');
+    remove.type = 'button'; remove.onclick = () => wrap.remove();
+    area.oninput = () => { count.textContent = area.value.length + ' / 500' };
+    area.oninput(); footer.append(count, remove); wrap.append(area, footer); $('notas').appendChild(wrap);
+}
+$('addnota').onclick = () => { agregarNota(); $('notas').lastElementChild.querySelector('textarea').focus() };
+
+function openPreview(e) {
+    editing = e; armed = false;
+    const content = $('preview-content');
+    const title = el('h3', null, e.materia); title.id = 'preview-title';
+    const details = el('p', 'preview-details', parse(e.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + (e.hora ? ' · ' + e.hora + ' h' : ''));
+    content.replaceChildren(el('span', 'tag ' + e.type, cap(e.type)), title, details,
+        el('p', 'preview-status', e.hecho ? '✓ Rendido o entregado' + (e.calif ? ' · Nota ' + e.calif : '') : 'Pendiente'));
+    const notes = notasDe(e);
+    if (notes.length) {
+        content.appendChild(el('div', 'lbl', 'Notas'));
+        notes.forEach(n => content.appendChild(el('p', 'preview-note', n)));
+    }
+    $('preview-grade').hidden = true; $('preview-calif').value = e.calif || '';
+    $('preview-delete').textContent = 'Eliminar';
+    $('preview-done').textContent = e.hecho ? 'Editar nota' : (e.type === 'tp' ? 'Ya entregué' : 'Ya rendí');
+    $('preview').classList.add('open'); $('preview-edit').focus();
+}
+$('preview-edit').onclick = () => { $('preview').classList.remove('open'); openModal(editing) };
+$('preview-done').onclick = () => { $('preview-grade').hidden = false; $('preview-calif').focus() };
+$('preview-save-grade').onclick = () => { editing.hecho = true; editing.calif = $('preview-calif').value.trim(); save(); render(); openPreview(editing) };
+$('preview-delete').onclick = () => {
+    if (!armed) { armed = true; $('preview-delete').textContent = '¿Seguro? Tocá de nuevo'; return }
+    events = events.filter(e => e !== editing); save(); close(); render();
+};
+$('preview-close').onclick = () => close();
 
 function openModal(e, date) {
     editing = e; armed = false;
@@ -151,7 +190,8 @@ function openModal(e, date) {
     $('materia').value = e ? e.materia : '';
     $('fecha').value = e ? e.date : (date || iso(new Date()));
     $('hora').value = e && e.hora || '';
-    $('nota').value = e && e.nota || '';
+    $('notas').replaceChildren();
+    (e && notasDe(e).length ? notasDe(e) : ['']).forEach(agregarNota);
     $('hecho').checked = !!(e && e.hecho);
     $('calif').value = e && e.calif || '';
     $('califw').hidden = !$('hecho').checked;
@@ -165,7 +205,7 @@ $('save').onclick = () => {
     const materia = $('materia').value.trim(), fecha = $('fecha').value;
     if (!materia) { $('materia').focus(); return }
     if (!fecha) { $('fecha').focus(); return }
-    const data = { type: document.querySelector('input[name=tipo]:checked').value, materia, date: fecha, hora: $('hora').value, nota: $('nota').value.trim(), hecho: $('hecho').checked, calif: $('hecho').checked ? $('calif').value.trim() : '' };
+    const data = { type: document.querySelector('input[name=tipo]:checked').value, materia, date: fecha, hora: $('hora').value, notas: [...$('notas').querySelectorAll('textarea')].map(n => n.value.trim()).filter(Boolean), nota: '', hecho: $('hecho').checked, calif: $('hecho').checked ? $('calif').value.trim() : '' };
     if (editing) Object.assign(editing, data);
     else events.push(Object.assign({ id: Date.now() + '' + Math.floor(Math.random() * 1e4) }, data));
     save(); close();
@@ -190,7 +230,7 @@ $('bkimp').onclick = () => {
         const ids = new Set(events.map(e => e.id)); let n = 0;
         a.forEach(e => {
             if (e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && TIPOS[e.type] && e.materia && !ids.has(e.id)) {
-                events.push({ id: e.id || Date.now() + 'i' + n, type: e.type, materia: String(e.materia).slice(0, 60), date: e.date, hora: e.hora || '', nota: String(e.nota || '').slice(0, 80), hecho: !!e.hecho, calif: String(e.calif || '').slice(0, 5) }); n++;
+                events.push({ id: e.id || Date.now() + 'i' + n, type: e.type, materia: String(e.materia).slice(0, 60), date: e.date, hora: e.hora || '', notas: notasDe(e).map(n => String(n).slice(0, 500)), nota: '', hecho: !!e.hecho, calif: String(e.calif || '').slice(0, 5) }); n++;
             }
         });
         save(); render(); $('bkmsg').textContent = n + (n === 1 ? ' fecha importada.' : ' fechas importadas.');
@@ -245,8 +285,8 @@ Va DESPUÉS del <script> principal. Usa events, render, openModal, etc. del scri
     const item = e => {
         const b = el('button', 'it ' + e.type + (e.hecho ? ' done' : ''));
         b.append(el('span', 'tag ' + e.type, cap(e.type)), el('b', null, e.materia),
-            el('small', null, [e.hecho ? 'Hecho' : cuando(diff(e.date)), e.hora && e.hora + ' h', !isNaN(num(e)) && 'Nota ' + e.calif, e.nota].filter(Boolean).join(', ')));
-        b.onclick = () => openModal(e); return b;
+            el('small', null, [e.hecho ? 'Hecho' : cuando(diff(e.date)), e.hora && e.hora + ' h', !isNaN(num(e)) && 'Nota ' + e.calif, textoNotas(e)].filter(Boolean).join(', ')));
+        b.onclick = () => openPreview(e); return b;
     };
 
     function pAgenda() {
@@ -255,7 +295,7 @@ Va DESPUÉS del <script> principal. Usa events, render, openModal, etc. del scri
         const L = el('div', 'list');
         const f = () => {
             L.replaceChildren(); const t = q.toLowerCase();
-            const ev = events.filter(e => !t || (e.materia + ' ' + (e.nota || '')).toLowerCase().includes(t)).sort(ord);
+            const ev = events.filter(e => !t || (e.materia + ' ' + textoNotas(e)).toLowerCase().includes(t)).sort(ord);
             const grp = (titulo, arr) => { if (!arr.length) return; L.appendChild(el('div', 'gt', titulo)); arr.forEach(e => L.appendChild(item(e))) };
             grp('Pasaron y no marcaste como hechas', ev.filter(e => !e.hecho && diff(e.date) < 0));
             grp('Próximos 7 días', ev.filter(e => !e.hecho && diff(e.date) >= 0 && diff(e.date) <= 7));
@@ -317,7 +357,7 @@ Va DESPUÉS del <script> principal. Usa events, render, openModal, etc. del scri
             const d = parse(e.date); L.push('BEGIN:VEVENT', 'UID:' + e.id + '@calendario', 'DTSTAMP:' + s(new Date()) + 'T000000Z');
             if (e.hora) { const [h, m] = e.hora.split(':').map(Number), f = hh => s(d) + 'T' + z(hh) + z(m) + '00'; L.push('DTSTART:' + f(h), 'DTEND:' + f(Math.min(h + 2, 23))) }
             else { const n = new Date(d); n.setDate(n.getDate() + 1); L.push('DTSTART;VALUE=DATE:' + s(d), 'DTEND;VALUE=DATE:' + s(n)) }
-            L.push('SUMMARY:' + cap(e.type) + ': ' + cl(e.materia)); if (e.nota) L.push('DESCRIPTION:' + cl(e.nota));
+            L.push('SUMMARY:' + cap(e.type) + ': ' + cl(e.materia)); if (textoNotas(e)) L.push('DESCRIPTION:' + cl(textoNotas(e)));
             L.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Es mañana', 'TRIGGER:-P1D', 'END:VALARM', 'END:VEVENT');
         });
         L.push('END:VCALENDAR');
