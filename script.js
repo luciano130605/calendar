@@ -38,6 +38,11 @@ const $$ = s => document.querySelectorAll(s);
 function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e }
 const diff = s => Math.round((parse(s) - parse(iso(new Date()))) / 864e5);
 const cuando = n => n === 0 ? 'Hoy' : n === 1 ? 'Mañana' : n > 1 ? 'En ' + n + ' días' : n === -1 ? 'Ayer' : 'Hace ' + (-n) + ' días';
+const estadoFecha = e => e.hecho ? 'Hecho' : cuando(diff(e.date));
+const cuenta = e => {
+    const n = diff(e.date);
+    return el('span', 'countdown' + (!e.hecho && n >= 0 && n <= 3 ? ' soon' : '') + (!e.hecho && n < 0 ? ' past' : ''), estadoFecha(e));
+};
 const ord = (a, b) => (a.date + (a.hora || '99')).localeCompare(b.date + (b.hora || '99'));
 const notasDe = e => Array.isArray(e.notas) ? e.notas : (e.nota ? [e.nota] : []);
 const textoNotas = e => notasDe(e).join(' · ');
@@ -106,7 +111,7 @@ function render() {
         const ev = all.filter(e => e.date === k).sort(ord);
         ev.forEach(e => {
             const b = el('button', 'chip ' + e.type + (e.hecho ? ' done' : ''), (e.hecho ? '✓ ' : '') + cap(e.type) + ': ' + e.materia);
-            b.title = e.materia + (e.hora ? ', ' + e.hora + ' h' : '') + (textoNotas(e) ? ' - ' + textoNotas(e) : '');
+            b.title = estadoFecha(e) + ' · ' + e.materia + (e.hora ? ', ' + e.hora + ' h' : '') + (textoNotas(e) ? ' - ' + textoNotas(e) : '');
             b.onclick = x => { x.stopPropagation(); openPreview(e) };
             c.appendChild(b);
         });
@@ -129,7 +134,7 @@ function render() {
     if (!evs.length && !festivosSel.length) dp.appendChild(el('div', 'empty', 'Sin fechas este día.'));
     evs.forEach(e => {
         const b = el('button', 'dprow ' + e.type + (e.hecho ? ' done' : ''));
-        b.append(el('span', 'tag ' + e.type, cap(e.type)), el('b', null, e.materia), el('small', null, [e.hora && e.hora + ' h', textoNotas(e)].filter(Boolean).join(', ') || (e.hecho ? 'Hecho' : cuando(diff(e.date)))));
+        b.append(el('span', 'tag ' + e.type, cap(e.type)), el('b', null, e.materia), el('small', null, [estadoFecha(e), e.hora && e.hora + ' h', textoNotas(e)].filter(Boolean).join(' · ')));
         b.onclick = () => openPreview(e); dp.appendChild(b);
     });
 
@@ -147,7 +152,9 @@ function render() {
         const dd = el('div', 'd', String(d.getDate()));
         dd.appendChild(el('span', null, DIAS[(d.getDay() + 6) % 7] + (modo === 'mes' ? '' : ' ' + d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', ''))));
         const mm = el('div', 'm'); mm.appendChild(el('b', null, e.materia));
-        mm.appendChild(el('span', null, [cuando(n), e.hora && e.hora + ' h', e.calif && 'Nota ' + e.calif, textoNotas(e)].filter(Boolean).join(', ')));
+        mm.appendChild(cuenta(e));
+        const detalles = [e.hora && e.hora + ' h', e.calif && 'Nota ' + e.calif, textoNotas(e)].filter(Boolean).join(' · ');
+        if (detalles) mm.appendChild(el('span', 'row-details', detalles));
         mn.append(dd, mm, el('span', 'tag ' + e.type, cap(e.type)));
         mn.onclick = () => openPreview(e);
         r.append(ck, mn); l.appendChild(r);
@@ -172,7 +179,7 @@ function openPreview(e) {
     const title = el('h3', null, e.materia); title.id = 'preview-title';
     const details = el('p', 'preview-details', parse(e.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + (e.hora ? ' · ' + e.hora + ' h' : ''));
     content.replaceChildren(el('span', 'tag ' + e.type, cap(e.type)), title, details,
-        el('p', 'preview-status', e.hecho ? '✓ Rendido o entregado' + (e.calif ? ' · Nota ' + e.calif : '') : 'Pendiente'));
+        el('p', 'preview-status', e.hecho ? '✓ Rendido o entregado' + (e.calif ? ' · Nota ' + e.calif : '') : 'Pendiente · ' + cuando(diff(e.date))));
     const notes = notasDe(e);
     if (notes.length) {
         content.appendChild(el('div', 'lbl', 'Notas'));
@@ -301,7 +308,7 @@ Va DESPUÉS del <script> principal. Usa events, render, openModal, etc. del scri
     const item = e => {
         const b = el('button', 'it ' + e.type + (e.hecho ? ' done' : ''));
         b.append(el('span', 'tag ' + e.type, cap(e.type)), el('b', null, e.materia),
-            el('small', null, [e.hecho ? 'Hecho' : cuando(diff(e.date)), e.hora && e.hora + ' h', !isNaN(num(e)) && 'Nota ' + e.calif, textoNotas(e)].filter(Boolean).join(', ')));
+            el('small', null, [e.hora && e.hora + ' h', !isNaN(num(e)) && 'Nota ' + e.calif, textoNotas(e)].filter(Boolean).join(' · ')), cuenta(e));
         b.onclick = () => openPreview(e); return b;
     };
 

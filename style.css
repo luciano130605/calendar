@@ -1554,3 +1554,22 @@ body.modal-open {
 .modal {
     overscroll-behavior: contain;
 }
+
+/* Cuenta regresiva en las fechas */
+.countdown {
+    display: inline-block;
+    margin-top: 5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: var(--raised);
+    color: var(--muted);
+    font: 400 12px var(--mono);
+}
+.countdown.soon {
+    background: color-mix(in srgb, var(--final) 15%, var(--surface));
+    color: var(--final);
+}
+.countdown.past { color: var(--muted); }
+.m .row-details { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+.it .countdown { grid-column: 2; justify-self: start; }
+.it small:empty { display: none; }
