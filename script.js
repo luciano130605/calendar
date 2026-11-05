@@ -99,22 +99,42 @@ function render() {
     db.replaceChildren(...Array.from({ length: 36 }, (_, i) => el('i', i < k ? (i === k - 1 ? 'on h' : 'on') : '')));
     $$('.fil').forEach(b => { const t = b.dataset.f; b.querySelector('.cn').textContent = events.filter(e => t === 'all' || e.type === t).length });
     const g = $('grid'); g.textContent = '';
-    DIAS.forEach(d => g.appendChild(el('div', 'dow', d)));
+    DIAS.forEach((d, i) => { const encabezado = el('div', 'dow', d); encabezado.style.gridColumn = String(i + 1); encabezado.style.gridRow = '1'; g.appendChild(encabezado) });
     const off = (new Date(y, m, 1).getDay() + 6) % 7;
     const total = Math.ceil((off + new Date(y, m + 1, 0).getDate()) / 7) * 7, hoy = iso(new Date());
     cargarFeriados(new Date(y, m, 1 - off).getFullYear());
     cargarFeriados(new Date(y, m, total - off).getFullYear());
+    // Reserve a consistent lane for each multi-day reminder in every week it spans.
+    const rangos = all.filter(e => e.type === 'recordatorio' && fin(e) > e.date);
+    const semanas = Array.from({ length: total / 7 }, () => []);
+    rangos.forEach(e => {
+        semanas.forEach((segmentos, semana) => {
+            const primero = iso(new Date(y, m, 1 - off + semana * 7));
+            const ultimo = iso(new Date(y, m, 7 - off + semana * 7));
+            if (e.date > ultimo || fin(e) < primero) return;
+            const inicio = Math.max(0, Math.round((parse(e.date) - parse(primero)) / 864e5));
+            const cierre = Math.min(6, Math.round((parse(fin(e)) - parse(primero)) / 864e5));
+            let lane = 0;
+            while (segmentos.some(s => s.lane === lane && s.inicio <= cierre && s.cierre >= inicio)) lane++;
+            segmentos.push({ e, inicio, cierre, lane });
+        });
+    });
     for (let i = 0; i < total; i++) {
         const d = new Date(y, m, 1 - off + i), k = iso(d);
         const festivos = feriadosDelDia(k);
         const c = el('div', 'cell' + (d.getMonth() !== m ? ' out' : '') + (k === hoy ? ' today' : '') + (k === sel ? ' sel' : '') + (festivos.length ? ' holiday' : ''));
+        c.style.gridColumn = String(i % 7 + 1); c.style.gridRow = String(Math.floor(i / 7) + 2);
+        if (i % 7 === 6) c.classList.add('week-end');
+        if (i >= total - 7) c.classList.add('last-week');
         const num = el('button', 'num', d.getDate());
         num.setAttribute('aria-label', d.getDate() + ' de ' + MESES[d.getMonth()] + (festivos.length ? ', feriado: ' + festivos.map(f => f.nombre).join(', ') : '') + '. Anotar fecha');
         num.onclick = () => tapDay(k);
         c.appendChild(num);
+        const lanes = semanas[Math.floor(i / 7)].reduce((n, s) => Math.max(n, s.lane + 1), 0);
+        if (lanes) { const espacio = el('div', 'range-space'); espacio.style.setProperty('--lanes', lanes); c.appendChild(espacio) }
         festivos.forEach(f => { const label = el('div', 'holiday-label', f.nombre); label.title = 'Feriado: ' + f.nombre; c.appendChild(label) });
         const ev = all.filter(e => e.date <= k && fin(e) >= k).sort(ord);
-        ev.forEach(e => {
+        ev.filter(e => !(e.type === 'recordatorio' && fin(e) > e.date)).forEach(e => {
             const b = el('button', 'chip ' + e.type + (e.hecho ? ' done' : ''), (e.hecho ? '✓ ' : '') + cap(e.type) + ': ' + e.materia);
             b.title = estadoFecha(e) + ' · ' + e.materia + (e.hora ? ', ' + e.hora + ' h' : '') + (textoNotas(e) ? ' - ' + textoNotas(e) : '');
             b.onclick = x => { x.stopPropagation(); openPreview(e) };
@@ -124,6 +144,19 @@ function render() {
         c.onclick = x => { if (x.target === c) tapDay(k) };
         g.appendChild(c);
     }
+
+    semanas.forEach((segmentos, semana) => segmentos.forEach(({ e, inicio, cierre, lane }) => {
+        const b = el('button', 'chip range-chip ' + e.type + (e.hecho ? ' done' : ''), (e.hecho ? '✓ ' : '') + cap(e.type) + ': ' + e.materia);
+        b.style.gridColumn = (inicio + 1) + ' / ' + (cierre + 2);
+        b.style.gridRow = String(semana + 2);
+        b.style.setProperty('--lane', lane);
+        b.classList.toggle('range-continues-before', e.date < iso(new Date(y, m, 1 - off + semana * 7)));
+        b.classList.toggle('range-continues-after', fin(e) > iso(new Date(y, m, 7 - off + semana * 7)));
+        b.title = estadoFecha(e) + ' · ' + e.materia;
+        b.setAttribute('aria-label', cap(e.type) + ': ' + e.materia + ', ' + rangoTexto(e));
+        b.onclick = x => { x.stopPropagation(); openPreview(e) };
+        g.appendChild(b);
+    }));
 
     const dp = $('daypanel'), evs = all.filter(e => e.date <= sel && fin(e) >= sel).sort(ord);
     const dph = el('div', 'dph'), add = el('button', 'btn primary', 'Anotar acá');
