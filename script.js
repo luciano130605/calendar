@@ -1,7 +1,7 @@
 const KEY = 'calendario-examenes', TK = 'calendario-tema';
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-const TIPOS = { parcial: 'Parcial', final: 'Final', tp: 'TP' };
+const TIPOS = { parcial: 'Parcial', final: 'Final', tp: 'TP', recordatorio: 'Recordatorio' };
 let events = [];
 const feriados = new Map(), consultasFeriados = new Set();
 function cargarFeriados(year) {
@@ -38,15 +38,18 @@ const $$ = s => document.querySelectorAll(s);
 function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e }
 const diff = s => Math.round((parse(s) - parse(iso(new Date()))) / 864e5);
 const cuando = n => n === 0 ? 'Hoy' : n === 1 ? 'Mañana' : n > 1 ? 'En ' + n + ' días' : n === -1 ? 'Ayer' : 'Hace ' + (-n) + ' días';
-const estadoFecha = e => e.hecho ? 'Hecho' : cuando(diff(e.date));
+const fin = e => e.endDate || e.date;
+const fechaPendiente = e => e.date < iso(new Date()) && fin(e) >= iso(new Date()) ? iso(new Date()) : e.date;
+const estadoFecha = e => e.hecho ? 'Hecho' : e.endDate && diff(e.date) <= 0 && diff(e.endDate) >= 0 ? 'Hasta ' + parse(e.endDate).toLocaleDateString('es-AR') : cuando(diff(e.date));
+const rangoTexto = e => e.endDate ? parse(e.date).toLocaleDateString('es-AR') + ' al ' + parse(e.endDate).toLocaleDateString('es-AR') : '';
 const cuenta = e => {
-    const n = diff(e.date);
+    const n = diff(fechaPendiente(e));
     return el('span', 'countdown' + (!e.hecho && n >= 0 && n <= 3 ? ' soon' : '') + (!e.hecho && n < 0 ? ' past' : ''), estadoFecha(e));
 };
-const ord = (a, b) => (a.date + (a.hora || '99')).localeCompare(b.date + (b.hora || '99'));
+const ord = (a, b) => (fechaPendiente(a) + (a.hora || '99')).localeCompare(fechaPendiente(b) + (b.hora || '99'));
 const notasDe = e => Array.isArray(e.notas) ? e.notas : (e.nota ? [e.nota] : []);
 const textoNotas = e => notasDe(e).join(' · ');
-const pend = e => !e.hecho && diff(e.date) >= 0;
+const pend = e => !e.hecho && diff(fin(e)) >= 0;
 const F = { 0: '01110100011001110101110011000101110', 1: '00100011000010000100001000010001110', 2: '01110100010000100010001000100011111', 3: '11110000010000101110000010000111110', 4: '00010001100101010010111110001000010', 5: '11111100001111000001000011000101110', 6: '00110010001000011110100011000101110', 7: '11111000010001000100010000100001000', 8: '01110100011000101110100011000101110', 9: '01110100011000101111000010001001100' };
 function dm(s) {
     const w = s.length * 6 - 1; let c = '';[...s].forEach((ch, i) => { for (let j = 0; j < 35; j++) { c += '<circle cx="' + (i * 6 + j % 5 + .5) + '" cy="' + (Math.floor(j / 5) + .5) + '" r=".36" ' + (F[ch][j] === '1' ? '' : 'opacity=".13" ') + '/>' } });
@@ -71,17 +74,19 @@ function render() {
     const y = view.getFullYear(), m = view.getMonth();
     const all = events.filter(e => filter === 'all' || e.type === filter);
     $('mes').replaceChildren(MESES[m] + ' ', el('span', 'yr', String(y)));
-    const mes = all.filter(e => { const d = parse(e.date); return d.getFullYear() === y && d.getMonth() === m }).sort(ord);
+    const inicioMes = iso(new Date(y, m, 1)), finMes = iso(new Date(y, m + 1, 0));
+    const mes = all.filter(e => e.date <= finMes && fin(e) >= inicioMes).sort(ord);
     const cnt = k => mes.filter(e => e.type === k).length, p = cnt('parcial'), f = cnt('final'), tp = cnt('tp');
-    $('resumen').textContent = mes.length ? [p && p + (p === 1 ? ' parcial' : ' parciales'), f && f + (f === 1 ? ' final' : ' finales'), tp && tp + (tp === 1 ? ' TP' : ' TPs')].filter(Boolean).join(', ') : 'Sin fechas este mes';
+    const rec = cnt('recordatorio');
+    $('resumen').textContent = mes.length ? [p && p + (p === 1 ? ' parcial' : ' parciales'), f && f + (f === 1 ? ' final' : ' finales'), tp && tp + (tp === 1 ? ' TP' : ' TPs'), rec && rec + (rec === 1 ? ' recordatorio' : ' recordatorios')].filter(Boolean).join(', ') : 'Sin fechas este mes';
 
     const prox = events.filter(pend).sort(ord)[0], h = $('hero');
     if (prox) {
-        const n = diff(prox.date), nom = prox.type === 'tp' ? 'TP' : cap(prox.type).toLowerCase();
+        const n = diff(fechaPendiente(prox)), nom = prox.type === 'tp' ? 'TP' : cap(prox.type).toLowerCase();
         const fe = parse(prox.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
         h.replaceChildren(el('div', 'lbl', 'Próxima fecha'), dm(n === 0 ? '0' : String(n)),
-            el('p', null, n === 0 ? cap(prox.type) + ' de ' + prox.materia : (n === 1 ? 'día' : 'días') + ' para el ' + nom + ' de ' + prox.materia),
-            el('small', null, fe + (prox.hora ? ', ' + prox.hora + ' h' : '')));
+            el('p', null, n === 0 ? cap(prox.type) + ': ' + prox.materia : (n === 1 ? 'día' : 'días') + ' para el ' + nom + ' de ' + prox.materia),
+            el('small', null, (rangoTexto(prox) || fe) + (prox.hora ? ', ' + prox.hora + ' h' : '')));
     } else h.replaceChildren(el('div', 'lbl', 'Próxima fecha'), dm('0'), el('p', null, 'Sin fechas pendientes'), el('small', null, 'Anotá tu próximo parcial, final o TP.'));
 
     const cs = events.map(e => parseFloat(String(e.calif || '').replace(',', '.'))).filter(n => !isNaN(n));
@@ -108,7 +113,7 @@ function render() {
         num.onclick = () => tapDay(k);
         c.appendChild(num);
         festivos.forEach(f => { const label = el('div', 'holiday-label', f.nombre); label.title = 'Feriado: ' + f.nombre; c.appendChild(label) });
-        const ev = all.filter(e => e.date === k).sort(ord);
+        const ev = all.filter(e => e.date <= k && fin(e) >= k).sort(ord);
         ev.forEach(e => {
             const b = el('button', 'chip ' + e.type + (e.hecho ? ' done' : ''), (e.hecho ? '✓ ' : '') + cap(e.type) + ': ' + e.materia);
             b.title = estadoFecha(e) + ' · ' + e.materia + (e.hora ? ', ' + e.hora + ' h' : '') + (textoNotas(e) ? ' - ' + textoNotas(e) : '');
@@ -120,7 +125,7 @@ function render() {
         g.appendChild(c);
     }
 
-    const dp = $('daypanel'), evs = all.filter(e => e.date === sel).sort(ord);
+    const dp = $('daypanel'), evs = all.filter(e => e.date <= sel && fin(e) >= sel).sort(ord);
     const dph = el('div', 'dph'), add = el('button', 'btn primary', 'Anotar acá');
     add.onclick = () => openModal(null, sel);
     dph.append(el('b', null, parse(sel).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })), add);
@@ -153,7 +158,7 @@ function render() {
         dd.appendChild(el('span', null, DIAS[(d.getDay() + 6) % 7] + (modo === 'mes' ? '' : ' ' + d.toLocaleDateString('es-AR', { month: 'short' }).replace('.', ''))));
         const mm = el('div', 'm'); mm.appendChild(el('b', null, e.materia));
         mm.appendChild(cuenta(e));
-        const detalles = [e.hora && e.hora + ' h', e.calif && 'Nota ' + e.calif, textoNotas(e)].filter(Boolean).join(' · ');
+        const detalles = [rangoTexto(e), e.hora && e.hora + ' h', e.calif && 'Nota ' + e.calif, textoNotas(e)].filter(Boolean).join(' · ');
         if (detalles) mm.appendChild(el('span', 'row-details', detalles));
         mn.append(dd, mm, el('span', 'tag ' + e.type, cap(e.type)));
         mn.onclick = () => openPreview(e);
@@ -177,9 +182,9 @@ function openPreview(e) {
     editing = e; armed = false;
     const content = $('preview-content');
     const title = el('h3', null, e.materia); title.id = 'preview-title';
-    const details = el('p', 'preview-details', parse(e.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) + (e.hora ? ' · ' + e.hora + ' h' : ''));
+    const details = el('p', 'preview-details', (rangoTexto(e) || parse(e.date).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })) + (e.hora ? ' · ' + e.hora + ' h' : ''));
     content.replaceChildren(el('span', 'tag ' + e.type, cap(e.type)), title, details,
-        el('p', 'preview-status', e.hecho ? '✓ Rendido o entregado' + (e.calif ? ' · Nota ' + e.calif : '') : 'Pendiente · ' + cuando(diff(e.date))));
+        el('p', 'preview-status', e.hecho ? '✓ Hecho' + (e.calif ? ' · Nota ' + e.calif : '') : 'Pendiente · ' + estadoFecha(e)));
     const notes = notasDe(e);
     if (notes.length) {
         content.appendChild(el('div', 'lbl', 'Notas'));
@@ -187,11 +192,11 @@ function openPreview(e) {
     }
     $('preview-grade').hidden = true; $('preview-calif').value = e.calif || '';
     $('preview-delete').textContent = 'Eliminar';
-    $('preview-done').textContent = e.hecho ? 'Editar nota' : (e.type === 'tp' ? 'Ya entregué' : 'Ya rendí');
+    $('preview-done').textContent = e.type === 'recordatorio' ? (e.hecho ? 'Marcar pendiente' : 'Marcar hecho') : e.hecho ? 'Editar nota' : (e.type === 'tp' ? 'Ya entregué' : 'Ya rendí');
     showOverlay('preview'); $('preview-edit').focus();
 }
 $('preview-edit').onclick = () => { $('preview').classList.remove('open'); openModal(editing) };
-$('preview-done').onclick = () => { $('preview-grade').hidden = false; $('preview-calif').focus() };
+$('preview-done').onclick = () => { if (editing.type === 'recordatorio') { editing.hecho = !editing.hecho; save(); render(); openPreview(editing); return } $('preview-grade').hidden = false; $('preview-calif').focus() };
 $('preview-save-grade').onclick = () => { editing.hecho = true; editing.calif = $('preview-calif').value.trim(); save(); render(); openPreview(editing) };
 $('preview-delete').onclick = () => {
     if (!armed) { armed = true; $('preview-delete').textContent = '¿Seguro? Tocá de nuevo'; return }
@@ -202,15 +207,17 @@ $('preview-close').onclick = () => close();
 function openModal(e, date) {
     editing = e; armed = false;
     $('mt').textContent = e ? 'Editar fecha' : 'Anotar fecha';
-    $(e && e.type === 'final' ? 't2' : e && e.type === 'tp' ? 't3' : 't1').checked = true;
+    $(e && e.type === 'final' ? 't2' : e && e.type === 'tp' ? 't3' : e && e.type === 'recordatorio' ? 't4' : 't1').checked = true;
     $('materia').value = e ? e.materia : '';
     $('fecha').value = e ? e.date : (date || iso(new Date()));
+    $('fecha-fin').value = e && e.endDate || '';
+    $('fecha-error').hidden = true;
     $('hora').value = e && e.hora || '';
     $('notas').replaceChildren();
     (e && notasDe(e).length ? notasDe(e) : ['']).forEach(agregarNota);
     $('hecho').checked = !!(e && e.hecho);
     $('calif').value = e && e.calif || '';
-    $('califw').hidden = !$('hecho').checked;
+    actualizarTipo();
     $('del').hidden = !e; $('del').textContent = 'Eliminar';
     showOverlay('ov');
     setTimeout(() => $('materia').focus(), 0);
@@ -223,12 +230,27 @@ const close = () => {
         window.scrollTo(0, scrollBeforeModal);
     }
 };
-$('hecho').onchange = () => { $('califw').hidden = !$('hecho').checked };
+function actualizarTipo() {
+    const recordatorio = $('t4').checked;
+    $('fin-wrap').hidden = !recordatorio;
+    $('hora-wrap').hidden = recordatorio;
+    $('materia-label').textContent = recordatorio ? 'Recordatorio' : 'Materia';
+    $('materia').placeholder = recordatorio ? 'Ej: Inscripción al final' : 'Ej: Programación II';
+    $('fecha-label').textContent = recordatorio ? 'Fecha de inicio' : 'Fecha';
+    $('hecho-label').textContent = recordatorio ? 'Ya lo hice' : 'Ya lo rendí o entregué';
+    $('califw').hidden = recordatorio || !$('hecho').checked;
+    $('fecha-error').hidden = true;
+}
+$$('input[name=tipo]').forEach(r => r.onchange = actualizarTipo);
+$('hecho').onchange = actualizarTipo;
 $('save').onclick = () => {
     const materia = $('materia').value.trim(), fecha = $('fecha').value;
     if (!materia) { $('materia').focus(); return }
     if (!fecha) { $('fecha').focus(); return }
+    const recordatorio = $('t4').checked, fechaFin = $('fecha-fin').value;
+    if (recordatorio && (!fechaFin || fechaFin < fecha)) { $('fecha-error').hidden = false; $('fecha-fin').focus(); return }
     const data = { type: document.querySelector('input[name=tipo]:checked').value, materia, date: fecha, hora: $('hora').value, notas: [...$('notas').querySelectorAll('textarea')].map(n => n.value.trim()).filter(Boolean), nota: '', hecho: $('hecho').checked, calif: $('hecho').checked ? $('calif').value.trim() : '' };
+    data.endDate = recordatorio ? fechaFin : ''; if (recordatorio) { data.calif = ''; data.hora = '' }
     if (editing) Object.assign(editing, data);
     else events.push(Object.assign({ id: Date.now() + '' + Math.floor(Math.random() * 1e4) }, data));
     save(); close();
@@ -253,7 +275,7 @@ $('bkimp').onclick = () => {
         const ids = new Set(events.map(e => e.id)); let n = 0;
         a.forEach(e => {
             if (e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && TIPOS[e.type] && e.materia && !ids.has(e.id)) {
-                events.push({ id: e.id || Date.now() + 'i' + n, type: e.type, materia: String(e.materia).slice(0, 60), date: e.date, hora: e.hora || '', notas: notasDe(e).map(n => String(n).slice(0, 500)), nota: '', hecho: !!e.hecho, calif: String(e.calif || '').slice(0, 5) }); n++;
+                events.push({ id: e.id || Date.now() + 'i' + n, type: e.type, materia: String(e.materia).slice(0, 60), date: e.date, endDate: typeof e.endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.endDate) && e.endDate >= e.date ? e.endDate : '', hora: e.hora || '', notas: notasDe(e).map(n => String(n).slice(0, 500)), nota: '', hecho: !!e.hecho, calif: String(e.calif || '').slice(0, 5) }); n++;
             }
         });
         save(); render(); $('bkmsg').textContent = n + (n === 1 ? ' fecha importada.' : ' fechas importadas.');
@@ -320,8 +342,8 @@ Va DESPUÉS del <script> principal. Usa events, render, openModal, etc. del scri
             L.replaceChildren(); const t = q.toLowerCase();
             const ev = events.filter(e => !t || (e.materia + ' ' + textoNotas(e)).toLowerCase().includes(t)).sort(ord);
             const grp = (titulo, arr) => { if (!arr.length) return; L.appendChild(el('div', 'gt', titulo)); arr.forEach(e => L.appendChild(item(e))) };
-            grp('Pasaron y no marcaste como hechas', ev.filter(e => !e.hecho && diff(e.date) < 0));
-            grp('Próximos 7 días', ev.filter(e => !e.hecho && diff(e.date) >= 0 && diff(e.date) <= 7));
+            grp('Pasaron y no marcaste como hechas', ev.filter(e => !e.hecho && diff(fin(e)) < 0));
+            grp('Próximos 7 días', ev.filter(e => pend(e) && diff(fechaPendiente(e)) <= 7));
             grp('Más adelante', ev.filter(e => !e.hecho && diff(e.date) > 7));
             grp('Hechas (últimas 10)', ev.filter(e => e.hecho).reverse().slice(0, 10));
             if (!L.children.length) L.appendChild(el('div', 'empty', 'Nada para mostrar.'));
@@ -378,8 +400,8 @@ Va DESPUÉS del <script> principal. Usa events, render, openModal, etc. del scri
         const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Calendario//ES', 'CALSCALE:GREGORIAN'];
         events.forEach(e => {
             const d = parse(e.date); L.push('BEGIN:VEVENT', 'UID:' + e.id + '@calendario', 'DTSTAMP:' + s(new Date()) + 'T000000Z');
-            if (e.hora) { const [h, m] = e.hora.split(':').map(Number), f = hh => s(d) + 'T' + z(hh) + z(m) + '00'; L.push('DTSTART:' + f(h), 'DTEND:' + f(Math.min(h + 2, 23))) }
-            else { const n = new Date(d); n.setDate(n.getDate() + 1); L.push('DTSTART;VALUE=DATE:' + s(d), 'DTEND;VALUE=DATE:' + s(n)) }
+            if (e.hora && !e.endDate) { const [h, m] = e.hora.split(':').map(Number), f = hh => s(d) + 'T' + z(hh) + z(m) + '00'; L.push('DTSTART:' + f(h), 'DTEND:' + f(Math.min(h + 2, 23))) }
+            else { const n = parse(fin(e)); n.setDate(n.getDate() + 1); L.push('DTSTART;VALUE=DATE:' + s(d), 'DTEND;VALUE=DATE:' + s(n)) }
             L.push('SUMMARY:' + cap(e.type) + ': ' + cl(e.materia)); if (textoNotas(e)) L.push('DESCRIPTION:' + cl(textoNotas(e)));
             L.push('BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:Es mañana', 'TRIGGER:-P1D', 'END:VALARM', 'END:VEVENT');
         });
@@ -388,9 +410,9 @@ Va DESPUÉS del <script> principal. Usa events, render, openModal, etc. del scri
     }
 
     function aviso() {
-        const n = events.filter(e => pend(e) && diff(e.date) <= 3).sort(ord);
+        const n = events.filter(e => pend(e) && diff(fechaPendiente(e)) <= 3).sort(ord);
         A.replaceChildren(); A.hidden = !n.length; if (!n.length) return;
-        A.appendChild(el('span', null, '⏰ ' + n.slice(0, 3).map(e => cap(e.type) + ' ' + e.materia + ' (' + cuando(diff(e.date)).toLowerCase() + ')').join(' · ') + (n.length > 3 ? ' y ' + (n.length - 3) + ' más' : '')));
+        A.appendChild(el('span', null, '⏰ ' + n.slice(0, 3).map(e => cap(e.type) + ' ' + e.materia + ' (' + estadoFecha(e).toLowerCase() + ')').join(' · ') + (n.length > 3 ? ' y ' + (n.length - 3) + ' más' : '')));
         if (window.Notification && Notification.permission === 'default') {
             const b = el('button', 'btn', 'Activar avisos'); b.onclick = () => Notification.requestPermission().then(() => { aviso(); notif() }); A.appendChild(b);
         }
@@ -399,9 +421,9 @@ Va DESPUÉS del <script> principal. Usa events, render, openModal, etc. del scri
         try {
             if (!window.Notification || Notification.permission !== 'granted') return;
             const h = iso(new Date()); if (localStorage.getItem('calendario-notif') === h) return;
-            const n = events.filter(e => pend(e) && diff(e.date) <= 1); if (!n.length) return;
+            const n = events.filter(e => pend(e) && diff(fechaPendiente(e)) <= 1); if (!n.length) return;
             localStorage.setItem('calendario-notif', h);
-            new Notification('Calendario', { body: n.map(e => cap(e.type) + ' ' + e.materia + ' · ' + cuando(diff(e.date))).join('\n') });
+            new Notification('Calendario', { body: n.map(e => cap(e.type) + ' ' + e.materia + ' · ' + estadoFecha(e)).join('\n') });
         } catch (e) { }
     }
 

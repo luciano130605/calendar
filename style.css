@@ -589,6 +589,11 @@ h1 {
     --c: var(--tp)
 }
 
+.recordatorio { --c: #a569d2 }
+.dot.recordatorio { background: #a569d2; box-shadow: 0 0 0 4px color-mix(in srgb, #a569d2 16%, transparent) }
+#fecha-error { color: var(--final); display: block }
+#fecha-error[hidden] { display: none }
+
 .chip.done {
     opacity: .5;
     text-decoration: line-through

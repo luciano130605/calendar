@@ -130,7 +130,7 @@
           data-f="parcial" aria-pressed="false"><i class="dot parcial"></i>Parciales<em
             class="cn">0</em></button><button class="fil" data-f="final" aria-pressed="false"><i
             class="dot final"></i>Finales<em class="cn">0</em></button><button class="fil" data-f="tp"
-          aria-pressed="false"><i class="dot tp"></i>TPs<em class="cn">0</em></button></div>
+          aria-pressed="false"><i class="dot tp"></i>TPs<em class="cn">0</em></button><button class="fil" data-f="recordatorio" aria-pressed="false"><i class="dot recordatorio"></i>Recordatorios<em class="cn">0</em></button></div>
       <div class="cards">
         <section class="card hero" id="hero" aria-live="polite"></section>
         <section class="card avance">
@@ -161,18 +161,20 @@
         <input type="radio" name="tipo" id="t1" value="parcial" checked><label class="parcial" for="t1">Parcial</label>
         <input type="radio" name="tipo" id="t2" value="final"><label class="final" for="t2">Final</label>
         <input type="radio" name="tipo" id="t3" value="tp"><label class="tp" for="t3">TP</label>
+        <input type="radio" name="tipo" id="t4" value="recordatorio"><label class="recordatorio" for="t4">Recordatorio</label>
       </div>
-      <label for="materia">Materia</label>
+      <label for="materia" id="materia-label">Materia</label>
       <input type="text" id="materia" maxlength="60" list="mats" placeholder="Ej: Programación II" autocomplete="off">
       <datalist id="mats"></datalist>
       <div class="two">
-        <div><label for="fecha">Fecha</label><input type="date" id="fecha"></div>
-        <div><label for="hora">Hora (opcional)</label><input type="time" id="hora"></div>
+        <div><label for="fecha" id="fecha-label">Fecha</label><input type="date" id="fecha"></div>
+        <div id="hora-wrap"><label for="hora">Hora (opcional)</label><input type="time" id="hora"></div>
+        <div id="fin-wrap" hidden><label for="fecha-fin">Fecha de fin</label><input type="date" id="fecha-fin"><small id="fecha-error" role="alert" hidden>Elegí una fecha de fin igual o posterior al inicio.</small></div>
       </div>
       <label>Notas (opcional)</label>
       <div id="notas"></div>
       <button type="button" class="btn add-note" id="addnota">+ Agregar nota</button>
-      <label class="ck2"><input type="checkbox" id="hecho">Ya lo rendí o entregué</label>
+      <label class="ck2"><input type="checkbox" id="hecho"><span id="hecho-label">Ya lo rendí o entregué</span></label>
       <div id="califw" hidden><label for="calif">Nota obtenida</label><input type="text" id="calif" maxlength="5"
           inputmode="decimal" placeholder="Ej: 8"></div>
       <div class="actions">
